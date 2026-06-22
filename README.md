@@ -1,34 +1,36 @@
-# Modular Cross-Platform Price Tracker
+# Intelligent Cross-Platform Price Tracker with Semantic AI Extraction
 
-A decoupled, automated web scraping solution built in Python to monitor and log commercial pricing fluctuations for consumer electronics across multiple retail platforms (including Lenovo and Amazon). The application extracts live promotional data using headless browser automation, logs time-series historical data into a local JSON store, and dispatches instant email alerts via secure SMTP gateways when a price drop is detected.
+An automated web scraping solution built in Python to monitor and log commercial pricing fluctuations for consumer electronics across multiple retail platforms (including Lenovo and Amazon). By utilizing a hybrid scraping and artificial intelligence architecture, the application extracts live promotional data without relying on fragile hardcoded CSS class layouts. It records time-series historical data into a local JSON store and dispatches encrypted email alerts via secure SMTP gateways when a price drop is detected.
 
 ## 🚀 Features
-* **Cross-Platform Scraping:** Dynamically handles both JavaScript-heavy client-side elements on Lenovo and complex, multi-layered screen-reader structures (`span.a-offscreen`) on Amazon.
-* **Externalized Configuration:** Decouples application logic from data targets by storing monitored assets inside an easily scalable `config.json` file.
-* **Isolated Factory Logging:** Features a dedicated `logger_factory` module providing a clean, relative path architecture safe for public repositories.
-* **Enterprise Log Rotation:** Implements `RotatingFileHandler` instances enforcing a strict 5 MB cap per log file, protecting disk space while automatically separating operational metrics (`tracker.log`) from pipeline failures (`error.log`).
-* **Background Automation:** Runs natively in the background as a headless macOS system daemon via `launchd`, using unbuffered output (`python -u`) for live streaming updates.
+* **Semantic AI Scraping:** Eliminates fragile CSS selector strings. The engine grabs raw webpage states and utilizes **Gemini 2.5 Flash** to extract exact retail target pricing details contextually.
+* **Decoupled Configuration:** Separates application orchestration logic from physical targets by externalizing monitored e-commerce URLs inside an easily scalable `config.json` file.
+* **Isolated Factory Logging:** Implements a standalone `logger_factory` module managing relative operational paths, safely allowing repository deployment without leaking user home directory paths.
+* **Enterprise Log Rotation:** Enforces a strict 5 MB cap per file layout using `RotatingFileHandler` instances, cleanly separating runtime metrics (`tracker.log`) from system processing failures (`error.log`).
+* **Headless Background Automation:** Built to run unattended as a native macOS background daemon via `launchd`.
 
 ---
 
 ## 🛠️ Tech Stack & Architecture
 * **Language:** Python 3.9+
-* **Automation Engine:** Selenium WebDriver (Chrome)
-* **Configuration Layer:** `python-dotenv` & Native JSON
-* **Network Protocol:** `smtplib` / `email.mime` (TLS Encrypted SMTP)
-* **Log Management:** Standard Python Logging (`RotatingFileHandler`)
+* **AI Extraction Layer:** Google GenAI SDK (`gemini-2.5-flash`)
+* **DOM Preprocessing:** BeautifulSoup4 (Strips script/style noise to optimize context tokens)
+* **Automation Engine:** Selenium WebDriver (Headless Chrome)
+* **Data Layer:** Native JSON Time-Series Store
+* **Alert System:** Encrypted TLS SMTP (`smtplib` / `email.mime`)
 
 ---
 
 ## 📋 Repository Structure
 ```text
 price-tracker/
-├── tracker.py          # Main core runtime & orchestration engine
-├── logger_factory.py   # Modular logging factory (handles paths & size limits)
+├── tracker.py          # Main core runtime & automation orchestration engine
+├── ai_extractor.py     # DOM preprocessing layer & Gemini Flash extraction engine
+├── logger_factory.py   # Modular logging factory (handles paths & size rotation)
 ├── config.json         # User configuration file containing target tracking URLs
 ├── prices.json         # Nested JSON database storing time-series historical data
-├── .env.example        # Reference template for credentials and environment vars
-├── .gitignore          # Excludes environments, execution logs, and secrets from Git
+├── .env.example        # Reference template for credentials and API keys
+├── .gitignore          # Prevents tracking environments, execution logs, and secrets
 └── README.md           # Documentation asset
 ```
 
@@ -62,7 +64,7 @@ Copy and paste this exact XML block into the editor (and remember to modify the 
     <key>StartCalendarInterval</key>
     <dict>
         <key>Hour</key>
-        <integer>18</integer>
+        <integer>12</integer>
         <key>Minute</key>
         <integer>0</integer>
     </dict>
@@ -83,7 +85,7 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.user.pricetracker.pl
 ```
 
 ### Step 4: Test a Force-Execution Manually
-You don't have to wait until 6:00 PM to verify that it works. You can tell your Mac to kick off an immediate test run right now using your configuration identifier:
+You don't have to wait until 12:00 PM to verify that it works. You can tell your Mac to kick off an immediate test run right now using your configuration identifier:
 ```bash
 launchctl kickstart -k gui/$(id -u)/com.user.pricetracker
 ```
