@@ -2,23 +2,30 @@ import os
 import time
 import smtplib
 import json
+from datetime import datetime
 from email.mime.text import MIMEText
-
 from dotenv import load_dotenv
-
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
+from logger_factory import get_logger
 
-from datetime import datetime
-
+logger = get_logger("tracker")
 load_dotenv()
 
-# --- CONFIGURATION ---
-URLS = {
-    "Legion Pro 5i": "https://www.lenovo.com/ca/en/p/laptops/legion-laptops/legion-pro-series/legion-pro-5i-gen-10-16-inch-intel/83f3000aus",
-    "Legion Pro 7i": "https://www.lenovo.com/ca/en/p/laptops/legion-laptops/legion-pro-series/legion-pro-7i-gen-10-16-inch-intel/83f500alcc"
-}
+# --- DYNAMIC PATH & CONFIG RESOLUTION ---
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
+DATA_FILE = os.path.join(BASE_DIR, "prices.json")
+
+# Load the target URLs dynamically from config.json
+if os.path.exists(CONFIG_FILE):
+    with open(CONFIG_FILE, "r") as f:
+        config_data = json.load(f)
+        URLS = config_data.get("URLS", {})
+else:
+    logger.error(f"Configuration file missing at {CONFIG_FILE}")
+    URLS = {}
 
 # Use environment variables or paste your credentials here securely
 EMAIL_SENDER = os.environ.get("TRACKER_EMAIL")
@@ -38,9 +45,14 @@ def fetch_price(url):
         driver.get(url)
         time.sleep(5)  # Allow dynamic price matrices to finish loading
         
-        # 1. Prioritize the exact discounted sale span class first
-        # 2. Fallback to generic final selectors if layout shifts
-        price_selectors = ["span.price-title", ".final-price", ".saleprice"]
+        # Expanded to cover Lenovo's tags and Amazon's nested standard wrappers
+        price_selectors = [
+            "span.price-title",
+            ".priceToPay span.a-offscreen",  # Targets Amazon's clean text node directly
+            "span.priceToPay",               # Fallback outer wrapper for Amazon
+            ".final-price", 
+            ".saleprice"
+        ]
         price_text = None
         
         for selector in price_selectors:
@@ -51,9 +63,11 @@ def fetch_price(url):
                     parent_classes = element.get_attribute("class") or ""
                     if "strike" in parent_classes.lower():
                         continue
-                        
-                    if element.is_displayed() and element.text:
-                        price_text = element.text
+                    
+                    # get_attribute('textContent') extracts text even if it's visually hidden via CSS/Aria
+                    text_value = element.get_attribute("textContent") or element.text
+                    if text_value and any(char.isdigit() for char in text_value):
+                        price_text = text_value
                         break
                 if price_text:
                     break
@@ -61,9 +75,15 @@ def fetch_price(url):
                 continue
                 
         if price_text:
-            # Strip out symbols/commas and convert to a clean float
-            cleaned_price = float(''.join(c for c in price_text if c.isdigit() or c == '.'))
-            return cleaned_price
+            # Cleans "$414..99" or " $414.99 " safely into float 414.99
+            # Resolving any double decimals caused by text flattening splits
+            cleaned_string = ''.join(c for c in price_text if c.isdigit() or c == '.')
+            if cleaned_string.count('.') > 1:
+                # Fixes potential formatting edge cases with split elements
+                parts = cleaned_string.split('.')
+                cleaned_string = f"{parts[0]}.{parts[1]}"
+                
+            return float(cleaned_string)
         return None
         
     finally:
@@ -82,7 +102,7 @@ def send_alert(laptop_name, old_price, new_price):
     with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
         server.login(EMAIL_SENDER, EMAIL_PASSWORD)
         server.sendmail(EMAIL_SENDER, [EMAIL_RECEIVER], msg.as_string())
-    print(f"Email alert sent for {laptop_name}!")
+    logger.info(f"Email alert sent for {laptop_name}!")
 
 def main():
     # Load existing history matrix or initialize a clean state
@@ -93,14 +113,14 @@ def main():
         data = {}
 
     for name, url in URLS.items():
-        print(f"Checking price for {name}...")
+        logger.info(f"Checking price for {name}...")
         current_price = fetch_price(url)
 
         # Grab execution timestamp
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         if current_price:
-            print(f"Current price: ${current_price:.2f}")
+            logger.info(f"Current price for {name}: ${current_price:.2f}")
             
             # Setup a clean record for the laptop if it's the first run ever
             if name not in data:
@@ -122,7 +142,7 @@ def main():
                 "price": current_price
             })
         else:
-            print(f"Failed to extract price for {name}")
+            logger.warning(f"Failed to extract price for {name}")
 
     # Write the clean data model structure back to disk
     with open(DATA_FILE, "w") as f:
