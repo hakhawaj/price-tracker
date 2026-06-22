@@ -1,0 +1,14 @@
+# Local virtual environment configuration files
+venv/
+.venv/
+
+# Environment secrets config file
+.env
+
+# Python caching footprints
+__pycache__/
+prices.json
+*.log
+
+# macOS system files
+.DS_Store
