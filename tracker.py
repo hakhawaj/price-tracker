@@ -9,6 +9,7 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from logger_factory import get_logger
+from ai_extractor import extract_price_with_ai
 
 logger = get_logger("tracker")
 load_dotenv()
@@ -33,7 +34,7 @@ EMAIL_PASSWORD = os.environ.get("TRACKER_PASSWORD")
 EMAIL_RECEIVER = os.environ.get("PERSONAL_RECEIVER")
 DATA_FILE = "prices.json"
 
-def fetch_price(url):
+def fetch_price(name, url):
     chrome_options = Options()
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--disable-gpu")
@@ -43,49 +44,16 @@ def fetch_price(url):
     
     try:
         driver.get(url)
-        time.sleep(5)  # Allow dynamic price matrices to finish loading
-        
-        # Expanded to cover Lenovo's tags and Amazon's nested standard wrappers
-        price_selectors = [
-            "span.price-title",
-            ".priceToPay span.a-offscreen",  # Targets Amazon's clean text node directly
-            "span.priceToPay",               # Fallback outer wrapper for Amazon
-            ".final-price", 
-            ".saleprice"
-        ]
-        price_text = None
-        
-        for selector in price_selectors:
-            try:
-                elements = driver.find_elements(By.CSS_SELECTOR, selector)
-                for element in elements:
-                    # Sanity Check: Skip the element if it's part of a strike-through class
-                    parent_classes = element.get_attribute("class") or ""
-                    if "strike" in parent_classes.lower():
-                        continue
-                    
-                    # get_attribute('textContent') extracts text even if it's visually hidden via CSS/Aria
-                    text_value = element.get_attribute("textContent") or element.text
-                    if text_value and any(char.isdigit() for char in text_value):
-                        price_text = text_value
-                        break
-                if price_text:
-                    break
-            except:
-                continue
-                
-        if price_text:
-            # Cleans "$414..99" or " $414.99 " safely into float 414.99
-            # Resolving any double decimals caused by text flattening splits
-            cleaned_string = ''.join(c for c in price_text if c.isdigit() or c == '.')
-            if cleaned_string.count('.') > 1:
-                # Fixes potential formatting edge cases with split elements
-                parts = cleaned_string.split('.')
-                cleaned_string = f"{parts[0]}.{parts[1]}"
-                
-            return float(cleaned_string)
+        time.sleep(6)  # Allow dynamic price matrices to finish loading
+
+        raw_html = driver.page_source
+
+        price = extract_price_with_ai(raw_html, name)
+        return price
+
+    except Exception as e:
+        logger.error(f"Error handling dynamic page execution pipeline: {str(e)}")
         return None
-        
     finally:
         driver.quit()
 
@@ -114,7 +82,7 @@ def main():
 
     for name, url in URLS.items():
         logger.info(f"Checking price for {name}...")
-        current_price = fetch_price(url)
+        current_price = fetch_price(name, url)
 
         # Grab execution timestamp
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
