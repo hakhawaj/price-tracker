@@ -27,3 +27,84 @@ price-tracker/
 ├── .env.example        # Shared blueprint for configuration keys
 ├── .gitignore          # Strict directory filters (excludes venv, secrets, and data)
 └── README.md           # Documentation asset
+```
+
+## 🔄 Automation Profile (macOS launchd)
+To schedule this script to run silently on a persistent daily background interval, compile a system configurations .plist file within your LaunchAgents subsystem.
+
+### Step 1: Create the Automation Configuration File (.plist)
+macOS automation tasks are controlled by XML configuration files called Property Lists (.plist). They must live in a specific system folder inside your user account.
+```bash
+nano ~/Library/LaunchAgents/com.user.pricetracker.plist
+```
+
+Copy and paste this exact XML block into the editor:
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.user.pricetracker</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>{python_directory}</string>
+        <string>{price_tracker_file_directory}/tracker.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>{price_tracker_file_directory}</string>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>18</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>{price_tracker_file_directory}/tracker.log</string>
+    <key>StandardErrorPath</key>
+    <string>{price_tracker_file_directory}/error.log</string>
+</dict>
+</plist>
+```
+
+Save the file by pressing Control + O, hitting Enter, and exit with Control + X.
+
+### Step 2: Set Strict File Permissions
+macOS will refuse to run automation scripts if the file configuration is modifiable by external apps. You must lock down permissions so only your user profile can read/write it:
+```bash
+chmod 644 ~/Library/LaunchAgents/com.user.pricetracker.plist
+```
+
+### Step 3: Register and Activate the Job
+Now, tell your Mac's operating system engine to read the file and append it to your active background schedule processing queue:
+```bash
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.user.pricetracker.plist
+```
+
+### Step 4: Test a Force-Execution Manually
+You don't have to wait until 6:00 PM to verify that it works. You can tell your Mac to kick off an immediate test run right now using your configuration identifier:
+```bash
+launchctl kickstart -k gui/$(id -u)/com.user.pricetracker
+```
+
+### Step 5: Verify the Telemetry Logs
+After force-running it, look inside your project folder. You should see tracker.log, error.log, and an updated prices.json with a brand-new timestamp entry! To check your code's standard shell output printouts:
+```bash
+cat ~{price_tracker_file_directory}/tracker.log
+```
+
+To confirm nothing broke or threw missing environmental path errors:
+```bash
+cat ~{price_tracker_file_directory}/error.log
+```
+
+Your tracker is now officially automated!
+Tip: If you ever want to completely turn off this automated background schedule in the future, just run:
+```bash
+launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.user.pricetracker.plist
+```
