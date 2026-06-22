@@ -10,6 +10,8 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 
+from datetime import datetime
+
 load_dotenv()
 
 # --- CONFIGURATION ---
@@ -83,29 +85,48 @@ def send_alert(laptop_name, old_price, new_price):
     print(f"Email alert sent for {laptop_name}!")
 
 def main():
+    # Load existing history matrix or initialize a clean state
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, "r") as f:
-            history = json.load(f)
+            data = json.load(f)
     else:
-        history = {}
+        data = {}
 
     for name, url in URLS.items():
         print(f"Checking price for {name}...")
         current_price = fetch_price(url)
+
+        # Grab execution timestamp
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         if current_price:
             print(f"Current price: ${current_price:.2f}")
-            old_price = history.get(name)
             
+            # Setup a clean record for the laptop if it's the first run ever
+            if name not in data:
+                data[name] = {
+                    "latest_price": None,
+                    "history": []
+                }
+            
+            old_price = data[name]["latest_price"]
+            
+            # Check for a drop compared to the last record
             if old_price and current_price < old_price:
                 send_alert(name, old_price, current_price)
                 
-            history[name] = current_price
+            # Update values and log the timestamped historical snapshot
+            data[name]["latest_price"] = current_price
+            data[name]["history"].append({
+                "timestamp": current_time,
+                "price": current_price
+            })
         else:
             print(f"Failed to extract price for {name}")
 
+    # Write the clean data model structure back to disk
     with open(DATA_FILE, "w") as f:
-        json.dump(history, f, indent=4)
+        json.dump(data, f, indent=4)
 
 if __name__ == "__main__":
     main()
