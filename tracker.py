@@ -4,13 +4,13 @@ import smtplib
 import json
 from email.mime.text import MIMEText
 
-#from dotenv import load_dotenv
+from dotenv import load_dotenv
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 
-#load_dotenv()
+load_dotenv()
 
 # --- CONFIGURATION ---
 URLS = {
